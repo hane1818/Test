@@ -84,14 +84,13 @@ class Generator(nn.Module):
         sent_ext = sent_embedding.transpose(0, 1)
 
         # Initialize hidden state of encoder
-        enchid = self._docenc.init_hidden(batch_size)
-        enchid = enchid if not args.use_gpu else enchid.cuda()
+        enchid = self._docenc.init_hidden(batch_size, (torch.cuda.is_available() and args.use_gpu))
         # Encode document
         encout, enchid = self._docenc(sent_enc, enchid)
         # Extract sentences
         if args.bidirectional:
-            enchid = enchid.view(args.num_layers, 2, -1, args.size)
-            enchid = enchid[:, 0] + enchid[:, 1]
+            enchid = tuple(hid.view(args.num_layers, 2, -1, args.size) for hid in enchid) if args.rnn_cell=='lstm' else enchid.view(args.num_layers, 2, -1, args.size)
+            enchid = tuple(hid[:, 0] + hid[:, 1] for hid in enchid) if args.rnn_cell=='lstm' else enchid[:, 0] + enchid[:, 1]
         probs, logits = self._docext(sent_ext, enchid)
 
         return probs.transpose(0, 1), logits.transpose(0, 1)

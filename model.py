@@ -78,7 +78,7 @@ class DocEncoder(nn.Module):
         self._size = size
         self._num_layers = num_layers
         self._rnn_cell = rnn_cell
-        self._dropout = dropout
+        self._dropout = dropout if num_layers > 1 else 0
         self._bidirectional = bidirectional
         self._rnn = build_rnn(
             self._rnn_cell,
@@ -91,8 +91,8 @@ class DocEncoder(nn.Module):
     def forward(self, input_, hidden):
         return self._rnn(input_, hidden)
 
-    def init_hidden(self, batch_size):
-        return init_rnn_states(self._rnn_cell, self._size, batch_size, self._num_layers, self._bidirectional)
+    def init_hidden(self, batch_size, cuda=False):
+        return init_rnn_states(self._rnn_cell, self._size, batch_size, self._num_layers, self._bidirectional, cuda)
 
 class Extractor(nn.Module):
     """Sentence Extractor

@@ -138,7 +138,7 @@ class Data(Dataset):
 
         print("Reading data......")
         doccount = 0
-        for doc, auxdoc, soracle, moracle, highlights in zip(doc_list, auxdoc_list, singleoracle_list, multipleoracle_list, highlights_list):
+        for doc, auxdoc, soracle, moracle, highlights in zip(doc_list, auxdoc_list, singleoracle_list, multipleoracle_list, highlights_list)[:30000]:
             doc_lines = doc.strip().split('\n')
             auxdoc_lines = auxdoc.strip().split('\n')
             soracle_lines = soracle.strip().split('\n')

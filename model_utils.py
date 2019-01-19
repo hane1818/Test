@@ -23,13 +23,17 @@ def build_rnn(rnn_cell, input_size, hidden_size, num_layers, dropout=0, bidirect
         rnn = nn.GRU(input_size, hidden_size, num_layers, dropout=dropout, bidirectional=bidirectional)
     return rnn
 
-def init_rnn_states(rnn_cell, hidden_size, batch_size, num_layers, bidirectional=False):
+def init_rnn_states(rnn_cell, hidden_size, batch_size, num_layers, bidirectional=False, cuda=False):
     if rnn_cell == 'lstm':
-        return (
+        states = (
             Variable(torch.empty(num_layers*(2 if bidirectional else 1), batch_size, hidden_size).uniform_(-INI, INI)),
             Variable(torch.empty(num_layers*(2 if bidirectional else 1), batch_size, hidden_size).uniform_(-INI, INI))
         )
-    return Variable(torch.empty(num_layers*(2 if bidirectional else 1), batch_size, hidden_size).uniform_(-INI, INI))
+        states = tuple(s.cuda() for s in states) if cuda else states
+    else:
+        states = Variable(torch.empty(num_layers*(2 if bidirectional else 1), batch_size, hidden_size).uniform_(-INI, INI))
+        states = states.cuda() if cuda else states
+    return states
 
 def extract_sentences_from_logits(source, logit, max_length):
     extracted = source.new_zeros(source.size())
