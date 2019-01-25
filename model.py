@@ -52,11 +52,12 @@ class ConvSentEncoder(nn.Module):
         self._convs = nn.ModuleList(
             [nn.Conv1d(self._embedding_size, self._sentembed_size//self._max_filter_length, i+1) for i in range(self._max_filter_length)])
 
+        self._lrn = nn.LocalResponseNorm(4, alpha=0.001/9.0, beta=0.75, k=1.0)
 
     def forward(self, input_):
         conv_in = F.dropout(input_.transpose(1, 2), self._dropout, training=self.training)
         output = torch.cat(
-            [F.relu(conv(conv_in)).max(dim=2)[0]
+            [self._lrn(F.relu(conv(conv_in)).max(dim=2)[0].unsqueeze(2)).squeeze()
             for conv in self._convs], dim=1)
 
         return output
@@ -121,7 +122,8 @@ class Extractor(nn.Module):
 
     def forward(self, input_, hidden):
         output, hidden = self._rnn(input_, hidden)
-        prob = F.softmax(self._linear(output), dim=2)
+        #prob = F.softmax(self._linear(output), dim=2)
+        prob = self._linear(output)
         return prob, prob.max(dim=2)[1]
 
 class RewardWeightedCrossEntropyLoss(nn.CrossEntropyLoss):
@@ -129,21 +131,23 @@ class RewardWeightedCrossEntropyLoss(nn.CrossEntropyLoss):
         super(RewardWeightedCrossEntropyLoss, self).__init__()
 
     def forward(self, input_, target, rewards, weights):
-        loss = F.cross_entropy(input_, target, reduction='none')
+        loss = F.cross_entropy(input_, target, reduction='none') # [batch_size*max_doc_length]
         if args.weighted_loss:
             loss = weights * loss
+        # [batch_size*max_doc_length] -> [batch_size, 1, max_doc_length]
         loss = loss.view(-1, 1, args.max_doc_length)
-
+        print(loss[0, 0, :10])
+        # [batch_size, 1] -> [max_doc_length, batch_size] -> [batch_size, max_doc_length] -> [batch_size, 1, max_doc_length]
         rewards = rewards.repeat(args.max_doc_length, 1).transpose(0, 1).view(-1, 1, args.max_doc_length)
 
         reward_weighted_loss = rewards * loss
-        reward_weighted_loss = torch.sum(reward_weighted_loss, 2)
-        reward_weighted_loss = torch.mean(reward_weighted_loss)
+        reward_weighted_loss = torch.sum(reward_weighted_loss, 2); print(reward_weighted_loss[0])
+        reward_weighted_loss = torch.mean(reward_weighted_loss); print(reward_weighted_loss)
         return reward_weighted_loss
 
 
 if __name__ == '__main__':
-    """import random
+    import random
     input_ = Variable(torch.tensor([random.randint(0, 1) for _ in range(10)]))
     mask = input_.eq(0)
     print(input_, mask)
@@ -167,12 +171,12 @@ if __name__ == '__main__':
     print(hidden.size())
     extractor = Extractor(args.sentembed_size, args.size, args.num_layers, args.rnn_cell)
     prob, logits = extractor(senenc, hidden)
-    print(logits)"""
-    import random
+    print(logits)
+    """import random
     lossfn = RewardWeightedCrossEntropyLoss()
     a = torch.randn(300, 2)
     b = torch.LongTensor([random.randint(0, 1) for _ in range(300)])
     w = torch.randn(300)
     r = torch.randn(6)
     loss = lossfn(a, b, r, w)
-    print(loss)
+    print(loss)"""

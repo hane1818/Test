@@ -120,7 +120,7 @@ class Data(Dataset):
                 if not summary.shape:
                     summary = np.expand_dims(summary, 0)
                 assert type(summary.tolist()) is list
-                f.write('\n'.join(summary.tolist()[:args.summary_ratio*doc_len]))
+                f.write('\n'.join(summary.tolist()[:args.summary_ratio*doc_len]).encode('utf-8'))
 
     def _read_data(self, data_type):
         file_prefix = os.path.join(args.preprocessed_data_directory, '.'.join([args.data_mode, data_type]))
@@ -138,7 +138,7 @@ class Data(Dataset):
 
         print("Reading data......")
         doccount = 0
-        for doc, auxdoc, soracle, moracle, highlights in zip(doc_list, auxdoc_list, singleoracle_list, multipleoracle_list, highlights_list)[:30000]:
+        for doc, auxdoc, soracle, moracle, highlights in zip(doc_list, auxdoc_list, singleoracle_list, multipleoracle_list, highlights_list)[:100]:
             doc_lines = doc.strip().split('\n')
             auxdoc_lines = auxdoc.strip().split('\n')
             soracle_lines = soracle.strip().split('\n')

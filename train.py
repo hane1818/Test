@@ -10,7 +10,7 @@ from tensorboardX import SummaryWriter
 import torch
 import torch.nn as nn
 from torch.autograd import Variable
-from torch.optim import Adam
+from torch.optim import Adam, SGD
 from torch.utils.data import DataLoader
 
 from data_utils import Data
@@ -46,7 +46,7 @@ def train():
         model.cuda()
 
     loss_fn = RewardWeightedCrossEntropyLoss() if args.rl else nn.CrossEntropyLoss()
-    optimizer = Adam(model.parameters(), lr=args.learning_rate_G)
+    optimizer = SGD(model.parameters(), lr=args.learning_rate_G*10, momentum=0.9)
 
     writer = SummaryWriter(args.train_dir)
 
@@ -64,11 +64,11 @@ def train():
             else:
                 loss = loss_fn(probs.contiguous().view(-1, args.target_label_size), label.view(-1))
             train_losses += loss.data * probs.size(0)
+            print(loss)
             loss.backward()
-            nn.utils.clip_grad_norm(model.parameters(), 0.5)
+            nn.utils.clip_grad_norm_(model.parameters(), 0.5)
             optimizer.step()
         train_losses /= len(train_data)
-        print(train_losses)
 
         # Save model
         print("Epoch %d: Saving model" % epoch)
