@@ -56,8 +56,11 @@ class ConvSentEncoder(nn.Module):
 
     def forward(self, input_):
         conv_in = F.dropout(input_.transpose(1, 2), self._dropout, training=self.training)
-        output = torch.cat(
+        """output = torch.cat(
             [self._lrn(F.relu(conv(conv_in)).max(dim=2)[0].unsqueeze(2)).squeeze()
+            for conv in self._convs], dim=1)"""
+        output = torch.cat(
+            [F.relu(conv(conv_in)).max(dim=2)[0]
             for conv in self._convs], dim=1)
 
         return output
@@ -126,6 +129,53 @@ class Extractor(nn.Module):
         prob = self._linear(output)
         return prob, prob.max(dim=2)[1]
 
+class AttnExtractor(nn.Module):
+    """Sentence Extractor
+    """
+    def __init__(self,
+        sentembed_size,
+        size,
+        num_layers,
+        rnn_cell='gru',
+        dropout=0.5,
+        target_label_size=2):
+        """Initial function
+        """
+        super(AttnExtractor, self).__init__()
+        self._sentembed_size = sentembed_size
+        self._size = size
+        self._num_layers = num_layers
+        self._rnn_cell = rnn_cell
+        self._dropout = dropout
+        self._target_label_size = target_label_size
+        self._rnn = build_rnn(
+            self._rnn_cell,
+            self._size,
+            self._size,
+            self._num_layers,
+        )
+        self._attn = nn.Linear(self._size+self._sentembed_size, args.max_doc_length)
+        self._attn_combine = nn.Linear(self._size+self._sentembed_size, self._size)
+        self._linear = nn.Linear(self._size, self._target_label_size)
+
+    def forward(self, input_, hidden, enc_out):
+        input_ = F.dropout(input_, self._dropout, training=self.training)
+        probs = []
+        for inp in input_:
+            attn_weights = F.softmax(
+                self._attn(torch.cat((inp, hidden[-1]), 1)), dim=1)
+            attn_applied = torch.bmm(attn_weights.unsqueeze(1), enc_out.transpose(0, 1))
+            output = torch.cat((inp, attn_applied.squeeze(1)), 1)
+            output = self._attn_combine(output)
+            output = F.relu(output)
+            output, hidden = self._rnn(output.unsqueeze(0), hidden)
+
+            prob = self._linear(output)
+            probs.append(prob)
+        probs = torch.stack(probs).contiguous().squeeze()
+
+        return probs, probs.max(dim=2)[1]
+
 class RewardWeightedCrossEntropyLoss(nn.CrossEntropyLoss):
     def __init__(self):
         super(RewardWeightedCrossEntropyLoss, self).__init__()
@@ -136,7 +186,6 @@ class RewardWeightedCrossEntropyLoss(nn.CrossEntropyLoss):
             loss = weights * loss
         # [batch_size*max_doc_length] -> [batch_size, 1, max_doc_length]
         loss = loss.view(-1, 1, args.max_doc_length)
-        print(loss[0, 0, :10])
         # [batch_size, 1] -> [max_doc_length, batch_size] -> [batch_size, max_doc_length] -> [batch_size, 1, max_doc_length]
         rewards = rewards.repeat(args.max_doc_length, 1).transpose(0, 1).view(-1, 1, args.max_doc_length)
 
@@ -169,8 +218,8 @@ if __name__ == '__main__':
     hidden = docencoder.init_hidden(5)
     docenc, hidden = docencoder(senenc, hidden)
     print(hidden.size())
-    extractor = Extractor(args.sentembed_size, args.size, args.num_layers, args.rnn_cell)
-    prob, logits = extractor(senenc, hidden)
+    extractor = AttnExtractor(args.sentembed_size, args.size, args.num_layers, args.rnn_cell)
+    prob, logits = extractor(senenc, hidden, docenc)
     print(logits)
     """import random
     lossfn = RewardWeightedCrossEntropyLoss()
