@@ -7,6 +7,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from my_args import args
+from model import AttnExtractor
 from model import ConvSentEncoder
 from model import DocEncoder
 from model import Extractor
@@ -35,7 +36,10 @@ class Generator(nn.Module):
             args.dropout,
             args.bidirectional)
 
-        self._docext = Extractor(args.sentembed_size,
+        self._docext = AttnExtractor(args.sentembed_size,
+            args.size,
+            args.num_layers,
+            args.rnn_cell) if args.attn else Extractor(args.sentembed_size,
             args.size,
             args.num_layers,
             args.rnn_cell)
@@ -91,7 +95,7 @@ class Generator(nn.Module):
         if args.bidirectional:
             enchid = tuple(hid.view(args.num_layers, 2, -1, args.size) for hid in enchid) if args.rnn_cell=='lstm' else enchid.view(args.num_layers, 2, -1, args.size)
             enchid = tuple(hid[:, 0] + hid[:, 1] for hid in enchid) if args.rnn_cell=='lstm' else enchid[:, 0] + enchid[:, 1]
-        probs, logits = self._docext(sent_ext, enchid)
+        probs, logits = self._docext(sent_ext, enchid, encout) if args.attn else self._docext(sent_ext, enchid)
 
         return probs.transpose(0, 1), logits.transpose(0, 1)
 
