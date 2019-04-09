@@ -128,7 +128,7 @@ class Data(Dataset):
              open(file_prefix+'.auxdoc') as auxdoc, \
              open(file_prefix+'.label.singleoracle') as singleoracle, \
              open(file_prefix+'.label.multipleoracle') as multipleoracle, \
-             open(file_prefix+'.highlights') as highlights:   # UNDO: Highlight file
+             open(file_prefix+'.1.highlight') as highlights:   # UNDO: Highlight file
             doc_list = doc.read().strip().split('\n\n')
             auxdoc_list = auxdoc.read().strip().split('\n\n')
             singleoracle_list = singleoracle.read().strip().split('\n\n')
