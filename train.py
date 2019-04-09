@@ -46,7 +46,8 @@ def train():
         model.cuda()
 
     loss_fn = RewardWeightedCrossEntropyLoss() if args.rl else nn.CrossEntropyLoss()
-    optimizer = SGD(model.parameters(), lr=args.learning_rate_G*10, momentum=0.9)
+    #optimizer = SGD(model.parameters(), lr=args.learning_rate_G*10, momentum=0.9)
+    optimizer = Adam(model.parameters(), lr=args.learning_rate_G)
 
     writer = SummaryWriter(args.train_dir)
 
@@ -64,7 +65,6 @@ def train():
             else:
                 loss = loss_fn(probs.contiguous().view(-1, args.target_label_size), label.view(-1))
             train_losses += loss.data * probs.size(0)
-            print(loss)
             loss.backward()
             nn.utils.clip_grad_norm_(model.parameters(), 0.5)
             optimizer.step()
@@ -103,6 +103,7 @@ def train():
     writer.close()
 
 if __name__ == '__main__':
+    print(args)
     train()
     """for epoch in range(20):
         system_dir = os.path.join(args.train_dir, '.'.join(["epoch-%d.model" % epoch, "validation", "summary"]))
