@@ -7,6 +7,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from my_args import args
+from model import MultiHeadAttnExtractor
 from model import AttnExtractor
 from model import ConvSentEncoder
 from model import DocEncoder
@@ -97,6 +98,9 @@ class Generator(nn.Module):
             enchid = tuple(hid[:, 0] + hid[:, 1] for hid in enchid) if args.rnn_cell=='lstm' else enchid[:, 0] + enchid[:, 1]
         probs, logits = self._docext(sent_ext, enchid, encout) if args.attn else self._docext(sent_ext, enchid)
 
+        if args.attn:
+            self.all_attn_weights = self._docext.all_attn_weights
+            
         return probs.transpose(0, 1), logits.transpose(0, 1)
 
     def _encode(self, input_):
