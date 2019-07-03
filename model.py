@@ -130,7 +130,7 @@ class Extractor(nn.Module):
         return prob, prob.max(dim=2)[1]
 
 class AttnExtractor(nn.Module):
-    """Sentence Extractor
+    """Attentional Sentence Extractor
     """
     def __init__(self,
         sentembed_size,
@@ -154,17 +154,19 @@ class AttnExtractor(nn.Module):
             self._size,
             self._num_layers,
         )
-        self._attn = nn.Linear(self._size+self._sentembed_size, args.max_doc_length)
+        self._attn = nn.Linear(self._size+self._size, 1)
         self._attn_combine = nn.Linear(self._size+self._sentembed_size, self._size)
         self._linear = nn.Linear(self._size, self._target_label_size)
 
     def forward(self, input_, hidden, enc_out):
         input_ = F.dropout(input_, self._dropout, training=self.training)
         probs = []
+        all_attn_weights = []
         for inp in input_:
             attn_weights = F.softmax(
-                self._attn(torch.cat((inp, hidden[-1]), 1)), dim=1)
-            attn_applied = torch.bmm(attn_weights.unsqueeze(1), enc_out.transpose(0, 1))
+                self._attn(torch.cat((enc_out, hidden[-1].expand(args.max_doc_length, -1, -1)), 2)), dim=1)
+            all_attn_weights.append(attn_weights.transpose(0, 1))
+            attn_applied = torch.bmm(attn_weights.transpose(0, 1).transpose(1, 2), enc_out.transpose(0, 1))
             output = torch.cat((inp, attn_applied.squeeze(1)), 1)
             output = self._attn_combine(output)
             output = F.relu(output)
@@ -173,8 +175,112 @@ class AttnExtractor(nn.Module):
             prob = self._linear(output)
             probs.append(prob)
         probs = torch.stack(probs).contiguous().squeeze()
+        self.all_attn_weights = torch.stack(all_attn_weights, dim=1).contiguous().squeeze()
 
         return probs, probs.max(dim=2)[1]
+
+class MultiHeadAttnExtractor(nn.Module):
+    """Multi-head Attentional Sentence Extractor
+    """
+    def __init__(self,
+        sentembed_size,
+        size,
+        num_layers,
+        rnn_cell='gru',
+        dropout=0.5,
+        target_label_size=2):
+        """Initial function
+        """
+        super(MultiHeadAttnExtractor, self).__init__()
+        self._sentembed_size = sentembed_size
+        self._size = size
+        self._num_layers = num_layers
+        self._rnn_cell = rnn_cell
+        self._dropout = dropout
+        self._target_label_size = target_label_size
+        self._rnn = build_rnn(
+            self._rnn_cell,
+            self._sentembed_size,
+            self._size,
+            self._num_layers,
+        )
+        self._multihead_attn = nn.MultiheadAttention(self._size, 6)
+        self._linear = nn.Linear(self._size, self._target_label_size)
+
+    def forward(self, input_, hidden, enc_out):
+        input_ = F.dropout(input_, self._dropout, training=self.training)
+        probs = []
+        for i, inp in enumerate(input_):
+            """attn_weights = F.softmax(
+                self._attn(torch.cat((enc_out, hidden[-1].expand(args.max_doc_length, -1, -1)), 2)), dim=1)
+            attn_applied = torch.bmm(attn_weights.transpose(0, 1).transpose(1, 2), enc_out.transpose(0, 1))
+            output = torch.cat((inp, attn_applied.squeeze(1)), 1)
+            output = self._attn_combine(output)
+            output = F.relu(output)"""
+            output, hidden = self._rnn(inp.unsqueeze(0), hidden)
+
+            attn_output, attn_output_weights = self._multihead_attn(output, enc_out[i], enc_out[i])
+
+            prob = self._linear(attn_output)
+            probs.append(prob)
+        probs = torch.stack(probs).contiguous().squeeze()
+
+        return probs, probs.max(dim=2)[1]
+
+class MMRAttnExtractor(nn.Module):
+    """MMR Attentional Sentence Extractor
+    """
+    def __init__(self,
+        sentembed_size,
+        size,
+        num_layers,
+        rnn_cell='gru',
+        dropout=0.5,
+        target_label_size=2):
+        """Initial Function
+        """
+        super(MMRAttnExtractor, self).__init__()
+        self._sentembed_size = sentembed_size
+        self._size = size
+        self._num_layers = num_layers
+        self._rnn_cell = rnn_cell
+        self._dropout = dropout
+        self._target_label_size = target_label_size
+        self._rnn = build_rnn(
+            self._rnn_cell,
+            self._sentembed_size,
+            self._size,
+            self._num_layers,
+        )
+        self._linear = nn.Linear(self._size, self._target_label_size)
+        self._mmr1 = nn.Bilinear(self._size, self._sentembed_size, args.max_doc_length)
+        self._mmr2 = nn.Bilinear(self._sentembed_size, self._size, args.max_doc_length)
+        self._mmr_lambda = nn.Parameter(torch.rand(1, requires_grad=True))
+        #self._mmr_combine = nn.Linear(self.)
+
+    def forward(self, input_, hidden, enc_out):
+        """input_ = F.dropout(input_, self._dropout, training=self.training)
+        probs = []
+        outputs = []
+        for i, inp in enumerate(input_):
+            self._mmr_lambda * self._mmr1(enc_out[i], inp) + (1-self._mmr_lambda) * self._mmr2(inp, )
+
+
+            attn_weights = F.softmax(
+                self._attn(torch.cat((inp, hidden[-1]), 1)), dim=1)
+            attn_applied = torch.bmm(attn_weights.unsqueeze(1), enc_out.transpose(0, 1))
+            output = torch.cat((inp, attn_applied.squeeze(1)), 1)
+            output = self._attn_combine(output)
+            output = F.relu(output)
+            output, hidden = self._rnn(output.unsqueeze(0), hidden)
+            outputs.append(output)
+
+            prob = self._linear(output)
+            probs.append(prob)
+        probs = torch.stack(probs).contiguous().squeeze()
+
+        return probs, probs.max(dim=2)[1]"""
+        pass
 
 class RewardWeightedCrossEntropyLoss(nn.CrossEntropyLoss):
     def __init__(self):
@@ -218,7 +324,7 @@ if __name__ == '__main__':
     hidden = docencoder.init_hidden(5)
     docenc, hidden = docencoder(senenc, hidden)
     print(hidden.size())
-    extractor = AttnExtractor(args.sentembed_size, args.size, args.num_layers, args.rnn_cell)
+    extractor = MultiHeadAttnExtractor(args.sentembed_size, args.size, args.num_layers, args.rnn_cell)
     prob, logits = extractor(senenc, hidden, docenc)
     print(logits)
     """import random
