@@ -40,7 +40,8 @@ class Generator(nn.Module):
         self._docext = AttnExtractor(args.sentembed_size,
             args.size,
             args.num_layers,
-            args.rnn_cell) if args.attn else Extractor(args.sentembed_size,
+            args.rnn_cell,
+            coverage=args.coverage) if args.attn else Extractor(args.sentembed_size,
             args.size,
             args.num_layers,
             args.rnn_cell)
@@ -100,7 +101,9 @@ class Generator(nn.Module):
 
         if args.attn:
             self.all_attn_weights = self._docext.all_attn_weights
-            
+            if args.coverage:
+                self.covloss = self._docext.covloss
+
         return probs.transpose(0, 1), logits.transpose(0, 1)
 
     def _encode(self, input_):

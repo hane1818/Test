@@ -198,12 +198,14 @@ def test():
             test_losses += loss_fn(probs.contiguous().view(-1, args.target_label_size), mlabel.view(-1), rewards.view(-1), weights.view(-1)).data * probs.size(0)
         else:
             test_losses += loss_fn(probs.contiguous().view(-1, args.target_label_size), label.view(-1)).data * probs.size(0)
+        if args.attn and args.coverage:
+            test_losses -= torch.sum(torch.mean(model.covloss, dim=1)).squeeze()
         test_data.write_prediction_summary(docname, logits, "epoch-%d.model" % args.model_to_load)
     test_losses /= len(test_data)
 
     # ROUGE Evaluation
-    system_dir = os.path.join(args.train_dir, '.'.join(["epoch-%d.model" % args.model_to_load, "validation", "summary"]))
-    model_dir = os.path.join(args.gold_summary_directory, "gold-%s-validation-orgcase" % args.data_mode)
+    system_dir = os.path.join(args.train_dir, '.'.join(["epoch-%d.model" % args.model_to_load, "test", "summary"]))
+    model_dir = os.path.join(args.gold_summary_directory, "gold-%s-test-orgcase" % args.data_mode)
     r1, r2, rl = calc_rouge_score(system_dir, model_dir)
     print("ROUGE Score(1, 2, L) %.2f %.2f %.2f"% (r1*100, r2*100, rl*100))
 

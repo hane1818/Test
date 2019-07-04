@@ -42,6 +42,7 @@ parser.add_argument('--doc_encoder_reverse', action='store_true', default=False)
 
 ## Attention Mechanism
 parser.add_argument('--attn', action='store_true', default=False)
+parser.add_argument('--coverage', action='store_true', default=False)
 
 ## Reinforcement Learning
 parser.add_argument('--rl', action='store_true', default=False)
